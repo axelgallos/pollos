@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Axel Pollos</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen active" id="login-screen">
+  <div class="login-box">
+    <div class="logo">🐔</div>
+    <h1>Axel Pollos</h1>
+    <p>Ingresa con tu correo para guardar tus registros</p>
+    <div class="field">
+      <label>Correo (Gmail)</label>
+      <input type="email" id="email-input" placeholder="tucorreo@gmail.com" autocomplete="email">
+    </div>
+    <div class="err" id="login-err"></div>
+    <button class="btn" id="login-btn">Ingresar / Registrarme</button>
+    <div class="hint">Tus registros se guardan en este dispositivo, asociados a tu correo.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="screen" id="app-screen">
+  <header>
+    <div class="top-row">
+      <h1>🐔 Axel Pollos</h1>
+    </div>
+    <div class="user-row">
+      <span id="user-email"></span>
+    </div>
+  </header>
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="Buscar por placa del pollo...">
+  </div>
+  <div id="list"></div>
+  <button class="plus-btn" id="add-btn" aria-label="Agregar">+</button>
+  <a href="#" class="logout-link" id="logout-btn">Cerrar sesión</a>
+</div>
+
+<!-- MODAL AGREGAR -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <button class="close" id="modal-close">✕</button>
+    <h2>Guardar pollo</h2>
+    <div class="field">
+      <label>Placa del pollo</label>
+      <input type="text" id="f-placa" placeholder="Ej. A-102">
+    </div>
+    <div class="field">
+      <label>Nombre de la mamá</label>
+      <input type="text" id="f-mama" placeholder="Ej. Pinta">
+    </div>
+    <div class="field">
+      <label>Nombre del papá</label>
+      <input type="text" id="f-papa" placeholder="Ej. Colorado">
+    </div>
+    <div class="field">
+      <label>Fecha en que nació</label>
+      <input type="date" id="f-fecha">
+    </div>
+    <div class="err" id="modal-err"></div>
+    <button class="btn" id="save-btn">Guardar</button>
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+let records = [];
+
+function storageKey(email){ return 'axelpollos_' + email.toLowerCase().trim(); }
+
+function loadRecords(email){
+  try{
+    const raw = localStorage.getItem(storageKey(email));
+    records = raw ? JSON.parse(raw) : [];
+  }catch(e){ records = []; }
+}
+function saveRecords(){
+  try{
+    localStorage.setItem(storageKey(currentUser), JSON.stringify(records));
+  }catch(e){}
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function renderList(filter){
+  const list = document.getElementById('list');
+  const q = (filter||'').toLowerCase().trim();
+  const filtered = records.filter(r => !q || r.placa.toLowerCase().includes(q));
+  list.innerHTML = '';
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">' + (records.length===0
+      ? 'Aún no has guardado ningún pollo. Toca el botón + para agregar uno.'
+      : 'No se encontró ninguna placa con esa búsqueda.') + '</div>';
+    return;
+  }
+  filtered.slice().reverse().forEach(r=>{
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `
+      <div class="placa">Placa: ${escapeHtml(r.placa)}</div>
+      <div class="row"><span>Mamá: </span>${escapeHtml(r.mama)}</div>
+      <div class="row"><span>Papá: </span>${escapeHtml(r.papa || '-')}</div>
+      <div class="row"><span>Nació: </span>${formatFecha(r.fecha)}</div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function formatFecha(f){
+  if(!f) return '-';
+  const [y,m,d] = f.split('-');
+  return d+'/'+m+'/'+y;
+}
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// LOGIN
+document.getElementById('login-btn').addEventListener('click', ()=>{
+  const email = document.getElementById('email-input').value.trim();
+  const err = document.getElementById('login-err');
+  if(!email || !email.includes('@')){
+    err.textContent = 'Ingresa un correo válido.';
+    return;
+  }
+  err.textContent = '';
+  currentUser = email;
+  try{ localStorage.setItem('axelpollos_last_user', email); }catch(e){}
+  loadRecords(currentUser);
+  document.getElementById('user-email').textContent = currentUser;
+  renderList('');
+  showScreen('app-screen');
+});
+
+document.getElementById('logout-btn').addEventListener('click', (e)=>{
+  e.preventDefault();
+  currentUser = null;
+  records = [];
+  document.getElementById('email-input').value = '';
+  showScreen('login-screen');
+});
+
+// si ya te registraste antes en este dispositivo, entra directo con tus pollos guardados
+try{
+  const last = localStorage.getItem('axelpollos_last_user');
+  if(last){
+    document.getElementById('email-input').value = last;
+    currentUser = last;
+    loadRecords(currentUser);
+    document.getElementById('user-email').textContent = currentUser;
+    renderList('');
+    showScreen('app-screen');
+  }
+}catch(e){}
+
+// BUSCAR
+document.getElementById('search-input').addEventListener('input', (e)=>{
+  renderList(e.target.value);
+});
+
+// MODAL
+const modalBg = document.getElementById('modal-bg');
+document.getElementById('add-btn').addEventListener('click', ()=>{
+  document.getElementById('f-placa').value = '';
+  document.getElementById('f-mama').value = '';
+  document.getElementById('f-papa').value = '';
+  document.getElementById('f-fecha').value = '';
+  document.getElementById('modal-err').textContent = '';
+  modalBg.classList.add('active');
+});
+document.getElementById('modal-close').addEventListener('click', ()=> modalBg.classList.remove('active'));
+modalBg.addEventListener('click', (e)=>{ if(e.target === modalBg) modalBg.classList.remove('active'); });
+
+document.getElementById('save-btn').addEventListener('click', ()=>{
+  const placa = document.getElementById('f-placa').value.trim();
+  const mama = document.getElementById('f-mama').value.trim();
+  const papa = document.getElementById('f-papa').value.trim();
+  const fecha = document.getElementById('f-fecha').value;
+  const err = document.getElementById('modal-err');
+  if(!placa || !mama || !fecha){
+    err.textContent = 'Completa los campos obligatorios.';
+    return;
+  }
+  records.push({placa, mama, papa, fecha});
+  saveRecords();
+  modalBg.classList.remove('active');
+  document.getElementById('search-input').value = '';
+  renderList('');
+});
+</script>
+</body>
+</html>
